@@ -1,39 +1,25 @@
 // Variables used by Scriptable.
 // These must be at the very top of the file. Do not edit.
-// always-run-in-app: true; icon-color: light-gray;
-// icon-glyph: magic;
+// icon-color: gray; icon-glyph: magic;
 
 const Cache = importModule('Cache');
 const appCache = new Cache('activity_counter');
 
-// Text size for the header text. Ex: "Daily Log for Fri, Nov 6"
-const TITLE_TEXT_SIZE = 20;
-const VALUE_TEXT_SIZE = 15;
-// Spacing below the header text
+const TITLE_TEXT_SIZE = 15;
+const VALUE_TEXT_SIZE = 12;
+
 const TITLE_TEXT_SPACING = 10;
-const FONT = "PingFangSC-Thin";
+// const FONT = "PingFangSC-Thin";
+const FONT = "Menlo";
 
 const DAY_HISTORY = 7;
 const DATE_KEY = "date";
 const KEY_SEPERATOR = "_";
 const MONITOR_ITEMS = [
   {
-    name: "Angry😡",
-    value: "Unnecessarily got angry 😡",
+    name: "Books📚",
+    id: "0",
     count: 0,
-    impact: "-",
-  },
-  {
-    name: "Hasty😱",
-    value: "Did not gave much thought",
-    count: 0,
-    impact: "-",
-  },
-  {
-    name: "Jog  🏃",
-    value: "Did not gave much thought",
-    count: 0,
-    impact: "+",
   }
 ];
 
@@ -75,7 +61,7 @@ function createWidget(monitorItems) {
   // Main bottom stack
   for (let key in monitorItems) {
     const row = stack.addStack();
-    const textLine = row.addText(setPadding(key,10) + " " + setPadding(monitorItems[key]).countValues.join(" "));
+    const textLine = row.addText(setPadding(key,15) + "" + monitorItems[key].done.join(" "));
     textLine.textColor = Color.white();
     textLine.font = new Font(FONT, VALUE_TEXT_SIZE);
     stack.addSpacer();
@@ -107,17 +93,19 @@ async function getWeeklyActivity() {
     return oneWeekActivtyData;
 }
 
-async function incrimentCountAndUpdateForActivity(activity, key) {
-  console.log("in incr method.. " + JSON.stringify(activity));
+async function incrimentCountAndUpdateForActivity(activityId, key) {
   if(key == null)
       key = getCacheKey(new Date());
-  let dayData = null;
-  await getActivityData(key).then(data => dayData = data, err => console.log(err));
-  const activityData = dayData.find(x => x.name == activity);
+  let currentDayData = null;
+  await getActivityData(key).then(data => currentDayData = data, err => console.log(err));
+  let activityData = currentDayData.find(x => x.id == activityId);
+  if(activityData == null) {
+    activityData = MONITOR_ITEMS.find(x => x.id == activityId)
+  }
   const count = (activityData?.count || 0) + 1;
   activityData.count = count;
-  dayData[activity] = activityData;
-  updateActivities(dayData, key);
+  currentDayData[activityId] = activityData;
+  updateActivities(currentDayData, key);
 }
 
 async function getActivityData(key) {
@@ -132,16 +120,20 @@ async function getActivityData(key) {
 function transformData(weeklyData) {
   var transformedData = {};
   for(var item of MONITOR_ITEMS) {
-    let name = item["name"];
+    let name = item.name;
     if(transformedData[name] == null) {
       transformedData[name] = {
         "countValues": new Array(),
-        "impact": item.impact
+        "impact": item.impact,
+        "id": item.id,
+        "done": new Array(),
       };
     }
     if(weeklyData != null) {
       for(var dayData of weeklyData) {
-        transformedData[name].countValues.push(dayData.find(x => x.name == name)?.count || 0);
+        const activityData = dayData.find(x => x.id == item.id);
+        transformedData[name].countValues.push(activityData?.count || 0);
+        transformedData[name].done.push((activityData?.count || 0) > 0? "✅": "❌");
       }
     }
   }
@@ -159,15 +151,12 @@ function getCacheKey(date) {
 
 
 let weeklyData = null;
-
 // Show alert with current data (if running script in app)
 if (config.runsInApp) {
   const alert = createAlert();
   const response = await alert.present();
   if(response < MONITOR_ITEMS.length) {
-    console.log(`clicked : ${response}`);
-    await incrimentCountAndUpdateForActivity(MONITOR_ITEMS[response].name).then(data => weeklyData = data, err=> console.log(err));
-    console.log("returned ..." + JSON.stringify(weeklyData));
+    await incrimentCountAndUpdateForActivity(MONITOR_ITEMS[response].id).then(data => weeklyData = data, err=> console.log(err));
   }
 }
 await getWeeklyActivity().then(data => weeklyData = data, err => console.log(err));
@@ -175,5 +164,5 @@ const widget = createWidget(transformData(weeklyData));
 // Set widget
 Script.setWidget(widget);
 // Present the widget
-widget.presentMedium();
+widget.presentLarge();
 Script.complete();
